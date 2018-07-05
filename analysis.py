@@ -101,7 +101,7 @@ def optimize_locations(allocations, classes, min_taxable_allocations, allowed_in
         taxable_allocations,
         args=(non_taxable_preference,),
         jac='2-point', # TODO: `gradient
-        hess=scipy.optimize.BFGS(), # TODO: Pretty sure I can provide this
+        hess=lambda x, _: np.zeros((len(x), len(x))),
         method='trust-constr',
         constraints=constraints,
         options={"maxiter": 5000},
