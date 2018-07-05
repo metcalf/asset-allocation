@@ -100,7 +100,7 @@ def optimize_locations(allocations, classes, min_taxable_allocations, allowed_in
         location_objective,
         taxable_allocations,
         args=(non_taxable_preference,),
-        jac='2-point', # TODO: `gradient
+        jac=lambda x, pref: pref,
         hess=lambda x, _: np.zeros((len(x), len(x))),
         method='trust-constr',
         constraints=constraints,
