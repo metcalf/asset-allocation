@@ -14,6 +14,8 @@ def main():
                         help='investable amount for an account in the form NAME=AMT')
     parser.add_argument('--max-age', default=7, type=int,
                         help='maximum age of input data files')
+    parser.add_argument('--no-sell', action='append', default=[],
+                        help='do not sell assets from these accounts')
     args = parser.parse_args()
 
     input_data = parsers.read_config(args.config_path)
@@ -39,16 +41,28 @@ def main():
         elif account.investable == 0:
             raise Exception("Did not find an investable amount for %s" % account.name)
 
+    account_names = set(a.name for a in accounts)
+    no_sell = set(args.no_sell)
+    invalid_names = no_sell - account_names
+    if len(invalid_names) > 0:
+        raise Exception("Invalid names for --no-sell: %s" % ", ".join(invalid_names))
+
     accounts_by_owner = defaultdict(list)
     for account in accounts:
         accounts_by_owner[account.owner].append(account)
 
     for owner, accts in accounts_by_owner.items():
         print("\nFor %s" % owner)
-        run_for_owner(accts, input_data["classes"], input_data["assets"], input_data["targets"][owner])
+        run_for_owner(
+            accts=accts, 
+            classes=input_data["classes"], 
+            assets=input_data["assets"], 
+            targets=input_data["targets"][owner],
+            no_sell_accounts=no_sell
+        )
         print("\n")
 
-def run_for_owner(accts, classes, assets, targets):
+def run_for_owner(accts, classes, assets, targets, no_sell_accounts):
     taxable_accts = [a for a in accts if a.taxable]
     non_taxable_accts = [a for a in accts if not a.taxable]
 
@@ -57,7 +71,8 @@ def run_for_owner(accts, classes, assets, targets):
         non_taxable_accts=non_taxable_accts,
         classes=classes,
         assets=assets,
-        targets=targets
+        targets=targets,
+        no_sell_accounts=no_sell_accounts,
     )
     
     printer.print_results(

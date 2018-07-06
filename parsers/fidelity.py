@@ -36,19 +36,18 @@ def parse(contents, config, allow_after):
         acct = accounts[acct_name]
 
         symbol = row['Symbol']
-        value = _parse_num(row['Current Value'])
 
         if symbol == "BLNK":
             continue
         elif acct_num in config["investable"] or symbol in INVESTABLE_SYMBOLS:
-            acct.investable += value
+            acct.investable += _parse_num(row['Current Value'])
         else:
             holding = Holding(
                 account=acct,
                 symbol=row['Symbol'],
                 quantity=_parse_num(row['Quantity']),
-                value=value,
-                basis=_parse_num(row['Cost Basis Total'])
+                price=_parse_num(row['Last Price']),
+                unit_cost=_parse_num(row['Cost Basis Per Share'])
             )
             acct.holdings.append(holding)
 

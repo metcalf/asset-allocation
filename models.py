@@ -41,12 +41,13 @@ class Account(object):
         )
 
 class Holding(object):
-    def __init__(self, account, symbol, quantity, value, basis):
+    def __init__(self, account, symbol, quantity, price, unit_cost):
+        self.quantity = quantity
+
         self._account = account
         self._symbol = symbol
-        self._quantity = quantity
-        self._value = value
-        self._basis = basis
+        self._price = price
+        self._unit_cost = unit_cost
 
     @property
     def account(self):
@@ -57,16 +58,16 @@ class Holding(object):
         return self._symbol
 
     @property
-    def quantity(self):
-        return self._quantity
-
-    @property
     def value(self):
-        return self._value
+        return self._price * self.quantity
 
     @property
     def basis(self):
-        return self._basis
+        return self.unit_cost * self.quantity
+
+    @property
+    def unit_cost(self):
+        return self._unit_cost
 
     def __repr__(self):
         return str(self)
