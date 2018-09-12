@@ -15,7 +15,7 @@ def main():
     parser.add_argument('--max-age', default=7, type=int,
                         help='maximum age of input data files')
     parser.add_argument('--no-sell', action='append', default=[],
-                        help='do not sell assets from these accounts')
+                        help='do not sell assets from these accounts:holdings')
     args = parser.parse_args()
 
     input_data = parsers.read_config(args.config_path)
@@ -30,23 +30,34 @@ def main():
 
     for account in accounts:
         inv = investable_overrides.get(account.name, None)
-        if inv:
+        if inv is not None:
             if account.investable > 0:
-                raise Exception(
+                warn(
                     "Supplied an investable amount for account %s that already has %d investable" % (
                     account.name, account.investable
                 ))
-            else:
-                account.investable = inv
+            account.investable = inv
         elif account.investable == 0:
             raise Exception("Did not find an investable amount for %s" % account.name)
 
-    account_names = set(a.name for a in accounts)
-    no_sell = set(args.no_sell)
-    invalid_names = no_sell - account_names
-    if len(invalid_names) > 0:
-        raise Exception("Invalid names for --no-sell: %s" % ", ".join(invalid_names))
+        if len(account.holdings) == 0:
+            warn("Did not find holdings for %s" % account.name)
 
+    accounts_by_name = dict((a.name, a) for a in accounts)
+
+    no_sell_holdings = defaultdict(set)
+    
+    for arg in args.no_sell:
+        parts = arg.split(":", 2)
+        acct = accounts_by_name[parts[0]]
+        if len(parts) == 1:
+            for holding in acct.holdings:
+                no_sell_holdings[acct.name].add(holding.symbol)
+        else:
+            symbols = parts[1].split(",")
+            for symbol in symbols:
+                no_sell_holdings[acct.name].add(symbol)
+    
     accounts_by_owner = defaultdict(list)
     for account in accounts:
         accounts_by_owner[account.owner].append(account)
@@ -58,11 +69,11 @@ def main():
             classes=input_data["classes"], 
             assets=input_data["assets"], 
             targets=input_data["targets"][owner],
-            no_sell_accounts=no_sell
+            no_sell_holdings=no_sell_holdings,
         )
         print("\n")
 
-def run_for_owner(accts, classes, assets, targets, no_sell_accounts):
+def run_for_owner(accts, classes, assets, targets, no_sell_holdings):
     taxable_accts = [a for a in accts if a.taxable]
     non_taxable_accts = [a for a in accts if not a.taxable]
 
@@ -72,9 +83,10 @@ def run_for_owner(accts, classes, assets, targets, no_sell_accounts):
         classes=classes,
         assets=assets,
         targets=targets,
-        no_sell_accounts=no_sell_accounts,
+        no_sell_holdings=no_sell_holdings,
     )
     
+    printer.print_investables(accts)
     printer.print_results(
         current_allocations=current_allocations,
         new_allocations=new_allocations,
@@ -84,7 +96,9 @@ def run_for_owner(accts, classes, assets, targets, no_sell_accounts):
         assets=assets,
         targets=targets
     )
-    
+
+def warn(text):
+    print("\033[0;31mWARNING:\033[0m %s" % text)
 
 if __name__== "__main__":
     main()

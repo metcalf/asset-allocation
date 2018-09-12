@@ -50,9 +50,6 @@ def parse(contents, config, allow_after):
                 holding.quantity -= sell
                 to_sell -= sell
 
-    for account in accounts.values():
-        assert len(account.holdings) > 0, "Did not find holdings for %s" % account.name
-
     return accounts.values()
 
 def _check_date(date_str, allow_after):

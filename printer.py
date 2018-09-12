@@ -7,10 +7,14 @@ import analysis
 def find_buyable_symbols(assets, cls, location, brokers):
     symbols = []
     for symbol, asset in assets.items():
+        try:
+            asset_brokers = asset["brokers"]
+        except KeyError:
+            raise KeyError("missing key 'brokers' for %s" % symbol)
         if (
             asset.get("location", location) == location and 
             asset["class"] == cls and 
-            len(brokers.intersection(asset["brokers"])) > 0
+            len(brokers.intersection(asset_brokers)) > 0
         ):
             symbols.append((asset.get("preference", 1), symbol))
 
@@ -25,10 +29,22 @@ def held_symbols_by_class(accts, assets):
 
     return holdings
 
+def print_investables(accts):
+    rows = []
+    for a in accts:
+        rows.append((a.name, "$%d" % a.investable))
+    
+    headers = [
+        "account", "investable"
+    ]
+    print(tabulate.tabulate(rows, headers=headers))
+
+
 def print_results(
     current_allocations, new_allocations, taxable_accts, non_taxable_accts, classes, assets, targets
 ):
-    total = sum(new_allocations)
+    curr_total = sum(current_allocations)
+    new_total = sum(new_allocations)
     num_classes = len(classes)
 
     rows = []
@@ -72,8 +88,8 @@ def print_results(
 
         row = [
             c,
-            "%0.1f%%" % (curr / total * 100),
-            "%0.1f%%" % (new / total * 100),
+            "%0.1f%%" % (curr / curr_total * 100),
+            "%0.1f%%" % (new / new_total * 100),
             "%0.1f%%" % (target * 100),
             "$%d" % curr_taxable,
             "$%d" % new_taxable,

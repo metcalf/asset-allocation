@@ -51,10 +51,6 @@ def parse(contents, config, allow_after):
             )
             acct.holdings.append(holding)
 
-    for account in accounts.values():
-        if len(account.holdings) == 0:
-            raise Exception("Did not find holdings for %s" % account.name)
-
     return accounts.values()
 
 def _check_date(date_str, allow_after):
