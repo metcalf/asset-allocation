@@ -24,7 +24,9 @@ def parse(contents, config, allow_after):
         value = _parse_num(row['Value ($)'])
         quantity = _parse_num(row['Quantity'])
 
-        if symbol in INVESTABLE_SYMBOLS:
+        if symbol == "--": # Executed transaction against margin account
+            continue
+        elif symbol in INVESTABLE_SYMBOLS:
             acct.investable += value
         elif row['Short/Long'] == ' Executed Sell':
             assert quantity < 0, "Sell quantities should be negative"

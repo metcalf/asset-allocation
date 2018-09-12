@@ -113,7 +113,7 @@ def optimize_locations(allocations, classes, min_taxable_allocations, allowed_in
 
     return new_allocations
 
-def optimize_allocations(taxable_accts, non_taxable_accts, classes, assets, targets, no_sell_holdings):
+def optimize_allocations(taxable_accts, non_taxable_accts, classes, assets, targets, no_sell_holdings, allow_gains):
     num_classes = len(classes)
     
     current_taxable_allocations = class_vector(classes, assets, taxable_accts)
@@ -121,7 +121,7 @@ def optimize_allocations(taxable_accts, non_taxable_accts, classes, assets, targ
 
     min_taxable_allocations = class_vector(
         classes, assets, taxable_accts, 
-        filter=lambda acct, hldg: hldg.symbol in no_sell_holdings[acct.name] or hldg.value > hldg.basis
+        filter=lambda acct, hldg: hldg.symbol in no_sell_holdings[acct.name] or (hldg.value > hldg.basis and not allow_gains)
     )
     min_non_taxable_allocations = class_vector(
         classes, assets, non_taxable_accts, 

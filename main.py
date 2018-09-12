@@ -16,6 +16,8 @@ def main():
                         help='maximum age of input data files')
     parser.add_argument('--no-sell', action='append', default=[],
                         help='do not sell assets from these accounts:holdings')
+    parser.add_argument('--allow-gains', action='store_true',
+                        help='allow selling assets that would incur capital gains')
     args = parser.parse_args()
 
     input_data = parsers.read_config(args.config_path)
@@ -70,10 +72,11 @@ def main():
             assets=input_data["assets"], 
             targets=input_data["targets"][owner],
             no_sell_holdings=no_sell_holdings,
+            allow_gains=args.allow_gains
         )
         print("\n")
 
-def run_for_owner(accts, classes, assets, targets, no_sell_holdings):
+def run_for_owner(accts, classes, assets, targets, no_sell_holdings, allow_gains):
     taxable_accts = [a for a in accts if a.taxable]
     non_taxable_accts = [a for a in accts if not a.taxable]
 
@@ -84,6 +87,7 @@ def run_for_owner(accts, classes, assets, targets, no_sell_holdings):
         assets=assets,
         targets=targets,
         no_sell_holdings=no_sell_holdings,
+        allow_gains=allow_gains
     )
     
     printer.print_investables(accts)
