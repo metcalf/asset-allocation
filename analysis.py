@@ -120,6 +120,8 @@ def optimize_allocations(taxable_accts, non_taxable_accts, classes, assets, targ
     current_non_taxable_allocations = class_vector(classes, assets, non_taxable_accts)
 
     # Negative value holdings represent unsettled sales so should always be in the sum
+    # TODO: What we really want is to net the negative amounts of a given holding out against the positives
+    # and then filter on what remains
     min_taxable_allocations = class_vector(
         classes, assets, taxable_accts, 
         filter=lambda acct, hldg: hldg.value < 0 or hldg.symbol in no_sell_holdings[acct.name] or (hldg.value > hldg.basis and not allow_gains)

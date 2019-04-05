@@ -1,7 +1,7 @@
 import csv
 
 import re
-import csv 
+import csv
 import datetime
 
 from models import Account, Holding
@@ -22,7 +22,7 @@ def parse(contents, config, allow_after):
     section = sections.pop()
     if not section.startswith('"Brokerage services are provided'):
         raise Exception("Expected useless section, got: %s" % section)
-    
+
     section = sections.pop()
     if not section.startswith('"The data and information in this spreadsheet'):
         raise Exception("Expected useless section, got: %s" % section)
@@ -32,7 +32,10 @@ def parse(contents, config, allow_after):
 
     for row in reader:
         acct_num = row["Account Name/Number"]
-        acct_name = num_to_name[acct_num]
+        try:
+            acct_name = num_to_name[acct_num]
+        except KeyError:
+            raise KeyError("Unknown account number %s. Accounts are: %s" % (acct_num, num_to_name))
         acct = accounts[acct_name]
 
         symbol = row['Symbol']
@@ -68,11 +71,11 @@ def _build_accounts(config):
             taxable=False,
         )
         accounts[name] = acct
-    
+
     return accounts
 
 def _parse_num(num_str):
-    if num_str == "n/a":
+    if num_str == "n/a" or num_str == "--":
         return float('nan')
-    else:   
+    else:
         return float(num_str.lstrip('$'))
