@@ -242,7 +242,10 @@ def optimize_allocations(taxable_accts, non_taxable_accts, classes, assets, targ
         raise Exception("Expected optimality <<1, got %f" % best_soln.optimality)
     allocations = best_soln.x
 
-    if abs(sum(allocations) - total) > 1:
-        raise Exception("Solution didn't spend all the money!")
+    unspent = sum(allocations) - total
+    if unspent > 1:
+         raise Exception("Solution didn't spend $%0.2f!" % unspent)
+    if unspent < -1:
+         raise Exception("Solution overspent $%0.2f!" % unspent)
 
     return (current_allocations, allocations)
