@@ -114,7 +114,7 @@ def optimize_locations(allocations, classes, min_taxable_allocations, allowed_in
     return new_allocations
 
 
-def run_optimization(current_allocations, target_allocations_vector, constraints):
+def run_optimization(current_allocations, target_allocations_vector, constraints, bounds):
     return scipy.optimize.minimize(
         objective,
         current_allocations,
@@ -122,9 +122,29 @@ def run_optimization(current_allocations, target_allocations_vector, constraints
         jac='3-point', # TODO: `gradient
         hess=scipy.optimize.BFGS(), # TODO: Pretty sure I can provide this
         method='trust-constr',
+        bounds=bounds,
         constraints=constraints,
         options={"maxiter": 5000},
     )
+
+def minimize_moves(best_soln, current_allocations, target_allocations_vector, num_classes, constraints, bounds):
+    for i, v in enumerate(best_soln.x):
+        if (v - current_allocations[i]) >= 0:
+            continue
+        if current_allocations[i] == 0 and (target_allocations_vector[i % num_classes]) == 0:
+            continue
+
+        new_bounds = bounds.copy()
+        bounds[i] = (current_allocations[i], current_allocations[i])
+
+        curr_soln = run_optimization(current_allocations, target_allocations_vector, constraints, bounds)
+        if (curr_soln.fun - best_soln.fun) < 0.1:
+            best_soln = curr_soln
+            bounds = new_bounds
+            print("+", end="", flush=True)
+        else:
+            print(".", end="", flush=True)
+    return best_soln
 
 
 def optimize_allocations(taxable_accts, non_taxable_accts, classes, assets, targets, no_sell_holdings, allow_gains):
@@ -166,18 +186,7 @@ def optimize_allocations(taxable_accts, non_taxable_accts, classes, assets, targ
     if total_only_in_taxable + target_allocations_vector[classes.index("US bond")] <= non_taxable_total:
         allowed_in_taxable.remove("US bond")
 
-    constraints = []
-
-    # Taxable account total
-    constraints.append(scipy.optimize.LinearConstraint(
-        [1] * num_classes + [0] * num_classes,
-        taxable_total, taxable_total
-    ))
-    # Non-taxable account total
-    constraints.append(scipy.optimize.LinearConstraint(
-        [0] * num_classes + [1] * num_classes,
-        non_taxable_total, non_taxable_total
-    ))
+    bounds = []
 
     # Taxable asset limits
     for i in range(num_classes):
@@ -190,9 +199,7 @@ def optimize_allocations(taxable_accts, non_taxable_accts, classes, assets, targ
         else:
             max_lim = min_lim
 
-        constraints.append(scipy.optimize.LinearConstraint(
-            arr, min_lim, max_lim
-        ))
+        bounds.append((min_lim, max_lim))
 
     # Non-taxable asset limits
     for i in range(num_classes):
@@ -205,36 +212,31 @@ def optimize_allocations(taxable_accts, non_taxable_accts, classes, assets, targ
         else:
             max_lim = min_lim
 
-        constraints.append(scipy.optimize.LinearConstraint(
-            arr, min_lim, max_lim
-        ))
+        bounds.append((min_lim, max_lim))
+
+    constraints = [
+        # Taxable account total
+        scipy.optimize.LinearConstraint(
+            [1] * num_classes + [0] * num_classes,
+            taxable_total, taxable_total
+        ),
+
+        # Non-taxable account total
+        scipy.optimize.LinearConstraint(
+            [0] * num_classes + [1] * num_classes,
+            non_taxable_total, non_taxable_total
+        ),
+    ]
+
 
     current_allocations = current_taxable_allocations + current_non_taxable_allocations
 
-    best_soln = run_optimization(current_allocations, target_allocations_vector, constraints)
+    best_soln = run_optimization(current_allocations, target_allocations_vector, constraints, bounds)
 
     # Attempt to avoid cases where we sell an asset only to buy in another account
-    for i, v in enumerate(best_soln.x):
-        if (v - current_allocations[i]) >= 0:
-            continue
-        if current_allocations[i] == 0 and (target_allocations_vector[i % num_classes]) == 0:
-            continue
-
-        arr = [0] * (2 * num_classes)
-        arr[i] = 1
-        new_constraints = constraints + [
-            scipy.optimize.LinearConstraint(
-                arr, current_allocations[i], current_allocations[i],
-            ),
-
-        ]
-        curr_soln = run_optimization(current_allocations, target_allocations_vector, new_constraints)
-        if (curr_soln.fun - best_soln.fun) < 0.1:
-            best_soln = curr_soln
-            constraints = new_constraints
-            print("+", end="", flush=True)
-        else:
-            print(".", end="", flush=True)
+    best_soln = minimize_moves(
+        best_soln, current_allocations, target_allocations_vector, num_classes, constraints, bounds
+    )
 
     print("")
 
