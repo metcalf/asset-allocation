@@ -60,10 +60,10 @@ def optimize_locations(allocations, classes, bounds):
     taxable_bounds = []
     for i, class_total in enumerate(class_totals):
         t_min, t_max = bounds[i]
-        nt_min, nt_max = bounds[num_classes + 1]
+        nt_min, _nt_max = bounds[num_classes + 1]
 
         taxable_bounds.append((
-            max(t_min, class_total - nt_max),
+            t_min,
             min(t_max, class_total - nt_min),
         ))
 
