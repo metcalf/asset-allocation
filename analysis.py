@@ -50,38 +50,33 @@ def objective(allocations, targets):
 def location_objective(taxable_allocations, non_taxable_preference):
     return sum(taxable_allocations[i] * pref for i, pref in enumerate(non_taxable_preference))
 
-def optimize_locations(allocations, classes, min_taxable_allocations, allowed_in_taxable):
+def optimize_locations(allocations, classes, bounds):
     constraints = []
     num_classes = len(classes)
 
     taxable_allocations = allocations[:num_classes]
+    class_totals = sum_to_classes(allocations, num_classes)
+
+    taxable_bounds = []
+    for i, class_total in enumerate(class_totals):
+        t_min, t_max = bounds[i]
+        nt_min, nt_max = bounds[num_classes + 1]
+
+        taxable_bounds.append((
+            max(t_min, class_total - nt_max),
+            min(t_max, class_total - nt_min),
+        ))
 
     # Account total doesn't change
     taxable_total = sum(taxable_allocations)
-    constraints.append(scipy.optimize.LinearConstraint(
+    constraints = [scipy.optimize.LinearConstraint(
         [1] * num_classes,
         taxable_total, taxable_total
-    ))
-
-    class_totals = sum_to_classes(allocations, num_classes)
+    )]
 
     non_taxable_preference = [0] * num_classes
     for i, c in enumerate(classes):
-        arr = [0] * num_classes
-        arr[i] = 1
-
         total_for_class = class_totals[i]
-
-        # TODO: dedupe
-        min_lim = min_taxable_allocations[i]
-        if c in allowed_in_taxable:
-            max_lim = max(min_lim, total_for_class)
-        else:
-            max_lim = min_lim
-
-        constraints.append(scipy.optimize.LinearConstraint(
-            arr, min_lim, max_lim
-        ))
 
         if abs(total_for_class) < 1:
             continue
@@ -89,7 +84,7 @@ def optimize_locations(allocations, classes, min_taxable_allocations, allowed_in
         if "bond" in c:
             # We much prefer diversified bonds in non-taxable accounts over municipal bonds
             # in taxable accounts.
-            pref = 1000
+            pref = 1
         else:
             pref = 0
         non_taxable_preference[i] = pref / total_for_class
@@ -102,6 +97,7 @@ def optimize_locations(allocations, classes, min_taxable_allocations, allowed_in
         hess=lambda x, _: np.zeros((len(x), len(x))),
         method='trust-constr',
         constraints=constraints,
+        bounds=taxable_bounds,
         options={"maxiter": 5000},
     )
 
@@ -144,6 +140,7 @@ def minimize_moves(best_soln, current_allocations, target_allocations_vector, nu
             print("+", end="", flush=True)
         else:
             print(".", end="", flush=True)
+    print("")
     return best_soln
 
 
@@ -177,14 +174,15 @@ def optimize_allocations(taxable_accts, non_taxable_accts, classes, assets, targ
     allowed_in_taxable = find_allowed_classes(assets, "taxable")
     allowed_in_non_taxable = find_allowed_classes(assets, "non-taxable")
 
+    # TODO: I don't think we need this anymore with the asset location stuff working?
     # US bonds are weird because municipal bonds are tax efficient but other bonds are not.
     # If we can satisfy our allocations without municipal bonds, then exclude them.
-    total_only_in_taxable = 0
-    for i, c in enumerate(classes):
-        if c in allowed_in_non_taxable and c not in allowed_in_taxable:
-            total_only_in_taxable += target_allocations_vector[i]
-    if total_only_in_taxable + target_allocations_vector[classes.index("US bond")] <= non_taxable_total:
-        allowed_in_taxable.remove("US bond")
+    # total_only_in_taxable = 0
+    # for i, c in enumerate(classes):
+    #     if c in allowed_in_non_taxable and c not in allowed_in_taxable:
+    #         total_only_in_taxable += target_allocations_vector[i]
+    # if total_only_in_taxable + target_allocations_vector[classes.index("US bond")] <= non_taxable_total:
+    #     allowed_in_taxable.remove("US bond")
 
     bounds = []
 
@@ -238,11 +236,10 @@ def optimize_allocations(taxable_accts, non_taxable_accts, classes, assets, targ
         best_soln, current_allocations, target_allocations_vector, num_classes, constraints, bounds
     )
 
-    print("")
-
     if abs(best_soln.optimality) > 1:
         raise Exception("Expected optimality <<1, got %f" % best_soln.optimality)
-    allocations = best_soln.x
+
+    allocations = optimize_locations(best_soln.x, classes, bounds)
 
     unspent = sum(allocations) - total
     if unspent > 1:
