@@ -68,6 +68,7 @@ def optimize_locations(allocations, classes, bounds, current_allocations):
         ))
 
     # Account total doesn't change
+    total = sum(allocations)
     taxable_total = sum(taxable_allocations)
     constraints = [scipy.optimize.LinearConstraint(
         [1] * num_classes,
@@ -84,14 +85,24 @@ def optimize_locations(allocations, classes, bounds, current_allocations):
         if "bond" in c:
             # We much prefer diversified bonds in non-taxable accounts over municipal bonds
             # in taxable accounts.
-            pref = 1
-        else:
-            pref = 0
-        non_taxable_preference[i] = pref / total_for_class
+            # TODO: This actual choice of value isn't super well thought out
+            non_taxable_preference[i] = total_for_class / total
 
-    best_soln, new_allocations = run_location_optimization(taxable_allocations, non_taxable_preference, constraints, taxable_bounds)
+    best_soln = run_location_optimization(taxable_allocations, non_taxable_preference, constraints, taxable_bounds)
+    check_result(best_soln)
 
-    for i, v in enumerate(best_soln.x):
+    allocations = allocations_from_taxables(class_totals, best_soln.x)
+
+    unattempted = set(range(len(allocations)))
+    while len(unattempted) > 0:
+        # Smallest absolute negative, then smallest postive
+        # The idea is we want to first remove cases where we sell in one accout
+        # just to buy in another and then remove as many more transactions as possible
+        # which is probably easier for smaller values
+        keyed = [(allocations[i] > 0, abs(allocations[i]), i) for i in unattempted]
+        i = sorted(keyed)[0][-1]
+        unattempted.remove(i)
+
         class_idx = i % num_classes
 
         # There's nothing in this class anyway
@@ -115,16 +126,24 @@ def optimize_locations(allocations, classes, bounds, current_allocations):
         new_bounds = taxable_bounds.copy()
         new_bounds[class_idx] = (new_bound, new_bound)
 
-        curr_soln = run_location_optimization(taxable_allocations, non_taxable_preference, constraints, new_bounds)
-        if (curr_soln.fun - best_soln.fun) < 0.1:
-            best_soln =  curr_soln
+        curr_soln = run_location_optimization(best_soln.x, non_taxable_preference, constraints, new_bounds)
+        if (curr_soln.fun - best_soln.fun) < 0.01 and (curr_soln.constr_violation - best_soln.constr_violation) < 0.01:
+            best_soln = curr_soln
             taxable_bounds = new_bounds
-            print("%s" % classes[class_idx], end="", flush=True)
+            allocations = allocations_from_taxables(class_totals, best_soln.x)
+            print("+", end="", flush=True)
         else:
             print(".", end="", flush=True)
     print("")
 
-    return allocations_from_taxables(class_totals, taxable_allocations)
+    return allocations_from_taxables(class_totals, best_soln.x)
+
+def check_result(soln):
+    if abs(soln.optimality) > 0.1:
+        raise Exception("Expected optimality <<0.1, got %f" % soln.optimality)
+
+    if soln.constr_violation > 0.1:
+        raise Exception("Expected constr_violation <<0.1, got %f" % soln.constr_violation)
 
 
 def run_optimization(current_allocations, target_allocations_vector, constraints, bounds):
@@ -139,9 +158,6 @@ def run_optimization(current_allocations, target_allocations_vector, constraints
         constraints=constraints,
         options={"maxiter": 5000},
     )
-
-    if abs(soln.optimality) > 1:
-        raise Exception("Expected optimality <<1, got %f" % soln.optimality)
 
     return soln
 
@@ -158,17 +174,13 @@ def run_location_optimization(taxable_allocations, non_taxable_preference, const
         options={"maxiter": 5000},
     )
 
-    if abs(soln.optimality) > 1:
-        raise Exception("Expected optimality <<1, got %f" % soln.optimality)
-
-    new_non_taxable = [class_totals[i] - taxable_allocations[i] for i in range(len(class_totals))]
-    new_allocations = np.concatenate((taxable_allocations, new_non_taxable))
-
     return soln
 
 def allocations_from_taxables(class_totals, taxable_allocations):
+    new_non_taxable = [class_totals[i] - taxable_allocations[i] for i in range(len(class_totals))]
+    allocations = np.concatenate((taxable_allocations, new_non_taxable))
 
-
+    return [v if v > 0.001 else 0.0 for v in allocations]
 
 def minimize_moves(best_soln, current_allocations, target_allocations_vector, num_classes, constraints, bounds):
     for i, v in enumerate(best_soln.x):
@@ -277,9 +289,7 @@ def optimize_allocations(taxable_accts, non_taxable_accts, classes, assets, targ
     current_allocations = current_taxable_allocations + current_non_taxable_allocations
 
     best_soln = run_optimization(current_allocations, target_allocations_vector, constraints, bounds)
-
-    if abs(best_soln.optimality) > 1:
-        raise Exception("Expected optimality <<1, got %f" % best_soln.optimality)
+    check_result(best_soln)
 
     # Attempt to avoid cases where we sell an asset only to buy in another account
     # best_soln = minimize_moves(
