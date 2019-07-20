@@ -50,7 +50,7 @@ def objective(allocations, targets):
 def location_objective(taxable_allocations, non_taxable_preference):
     return sum(taxable_allocations[i] * pref for i, pref in enumerate(non_taxable_preference))
 
-def optimize_locations(allocations, classes, bounds):
+def optimize_locations(allocations, classes, bounds, current_allocations):
     constraints = []
     num_classes = len(classes)
 
@@ -60,10 +60,10 @@ def optimize_locations(allocations, classes, bounds):
     taxable_bounds = []
     for i, class_total in enumerate(class_totals):
         t_min, t_max = bounds[i]
-        nt_min, _nt_max = bounds[num_classes + 1]
+        nt_min, nt_max = bounds[num_classes + i]
 
         taxable_bounds.append((
-            t_min,
+            max(t_min, class_total - nt_max),
             min(t_max, class_total - nt_min),
         ))
 
@@ -89,29 +89,46 @@ def optimize_locations(allocations, classes, bounds):
             pref = 0
         non_taxable_preference[i] = pref / total_for_class
 
-    soln = scipy.optimize.minimize(
-        location_objective,
-        taxable_allocations,
-        args=(non_taxable_preference,),
-        jac=lambda x, pref: pref,
-        hess=lambda x, _: np.zeros((len(x), len(x))),
-        method='trust-constr',
-        constraints=constraints,
-        bounds=taxable_bounds,
-        options={"maxiter": 5000},
-    )
+    best_soln, new_allocations = run_location_optimization(taxable_allocations, non_taxable_preference, constraints, taxable_bounds)
 
-    if abs(soln.optimality) > 1:
-        raise Exception("Expected optimality <<1, got %f" % soln.optimality)
+    for i, v in enumerate(best_soln.x):
+        class_idx = i % num_classes
 
-    new_non_taxable = [class_totals[i] - soln.x[i] for i in range(num_classes)]
-    new_allocations = np.concatenate((soln.x, new_non_taxable))
+        # There's nothing in this class anyway
+        if class_totals[class_idx] < 1:
+            continue
 
-    return new_allocations
+        if i < num_classes:
+            new_bound = current_allocations[i]
+        else:
+            new_bound = class_totals[class_idx] - current_allocations[i]
+
+        # Check to make sure the new bound doesn't violate the old bounds
+        old_bound = taxable_bounds[class_idx]
+        if old_bound[0] > new_bound or old_bound[1] < new_bound:
+            continue
+
+        # We're already constrained to the current allocation
+        if old_bound[0] == new_bound and old_bound[1] == new_bound:
+            continue
+
+        new_bounds = taxable_bounds.copy()
+        new_bounds[class_idx] = (new_bound, new_bound)
+
+        curr_soln = run_location_optimization(taxable_allocations, non_taxable_preference, constraints, new_bounds)
+        if (curr_soln.fun - best_soln.fun) < 0.1:
+            best_soln =  curr_soln
+            taxable_bounds = new_bounds
+            print("%s" % classes[class_idx], end="", flush=True)
+        else:
+            print(".", end="", flush=True)
+    print("")
+
+    return allocations_from_taxables(class_totals, taxable_allocations)
 
 
 def run_optimization(current_allocations, target_allocations_vector, constraints, bounds):
-    return scipy.optimize.minimize(
+    soln = scipy.optimize.minimize(
         objective,
         current_allocations,
         args=(target_allocations_vector,),
@@ -123,6 +140,36 @@ def run_optimization(current_allocations, target_allocations_vector, constraints
         options={"maxiter": 5000},
     )
 
+    if abs(soln.optimality) > 1:
+        raise Exception("Expected optimality <<1, got %f" % soln.optimality)
+
+    return soln
+
+def run_location_optimization(taxable_allocations, non_taxable_preference, constraints, bounds):
+    soln = scipy.optimize.minimize(
+        location_objective,
+        taxable_allocations,
+        args=(non_taxable_preference,),
+        jac=lambda x, pref: pref,
+        hess=lambda x, _: np.zeros((len(x), len(x))),
+        method='trust-constr',
+        constraints=constraints,
+        bounds=bounds,
+        options={"maxiter": 5000},
+    )
+
+    if abs(soln.optimality) > 1:
+        raise Exception("Expected optimality <<1, got %f" % soln.optimality)
+
+    new_non_taxable = [class_totals[i] - taxable_allocations[i] for i in range(len(class_totals))]
+    new_allocations = np.concatenate((taxable_allocations, new_non_taxable))
+
+    return soln
+
+def allocations_from_taxables(class_totals, taxable_allocations):
+
+
+
 def minimize_moves(best_soln, current_allocations, target_allocations_vector, num_classes, constraints, bounds):
     for i, v in enumerate(best_soln.x):
         if (v - current_allocations[i]) >= 0:
@@ -131,9 +178,9 @@ def minimize_moves(best_soln, current_allocations, target_allocations_vector, nu
             continue
 
         new_bounds = bounds.copy()
-        bounds[i] = (current_allocations[i], current_allocations[i])
+        new_bounds[i] = (current_allocations[i], current_allocations[i])
 
-        curr_soln = run_optimization(current_allocations, target_allocations_vector, constraints, bounds)
+        curr_soln = run_optimization(current_allocations, target_allocations_vector, constraints, new_bounds)
         if (curr_soln.fun - best_soln.fun) < 0.1:
             best_soln = curr_soln
             bounds = new_bounds
@@ -231,15 +278,15 @@ def optimize_allocations(taxable_accts, non_taxable_accts, classes, assets, targ
 
     best_soln = run_optimization(current_allocations, target_allocations_vector, constraints, bounds)
 
-    # Attempt to avoid cases where we sell an asset only to buy in another account
-    best_soln = minimize_moves(
-        best_soln, current_allocations, target_allocations_vector, num_classes, constraints, bounds
-    )
-
     if abs(best_soln.optimality) > 1:
         raise Exception("Expected optimality <<1, got %f" % best_soln.optimality)
 
-    allocations = optimize_locations(best_soln.x, classes, bounds)
+    # Attempt to avoid cases where we sell an asset only to buy in another account
+    # best_soln = minimize_moves(
+    #     best_soln, current_allocations, target_allocations_vector, num_classes, constraints, bounds
+    # )
+
+    allocations = optimize_locations(best_soln.x, classes, bounds,  current_allocations)
 
     unspent = sum(allocations) - total
     if unspent > 1:
