@@ -21,17 +21,17 @@ def main():
     args = parser.parse_args()
 
     input_data = parsers.read_config(args.config_path)
-    
-    investable_overrides = {}
-    for inv_str in args.investable:
-        name, value = inv_str.split("=", 2)
-        investable_overrides[name] = float(value)
 
     allow_after = datetime.datetime.now() - datetime.timedelta(days=args.max_age)
     accounts = parsers.read_accounts(os.path.dirname(args.config_path), input_data["accounts"], allow_after)
 
+    investable_overrides = {}
+    for inv_str in args.investable:
+        name, value = inv_str.split("=", 2)
+        investable_overrides[name] = float(value.replace(',', ''))
+
     for account in accounts:
-        inv = investable_overrides.get(account.name, None)
+        inv = investable_overrides.pop(account.name, None)
         if inv is not None:
             if account.investable > 0:
                 warn(
@@ -45,10 +45,13 @@ def main():
         if len(account.holdings) == 0:
             warn("Did not find holdings for %s" % account.name)
 
+    if len(investable_overrides) > 0:
+        raise Exception("Specified investable amounts for unknown accounts: %s" % ', '.join(investable_overrides.keys()))
+
     accounts_by_name = dict((a.name, a) for a in accounts)
 
     no_sell_holdings = defaultdict(set)
-    
+
     for arg in args.no_sell:
         parts = arg.split(":", 2)
         acct = accounts_by_name[parts[0]]
@@ -59,7 +62,7 @@ def main():
             symbols = parts[1].split(",")
             for symbol in symbols:
                 no_sell_holdings[acct.name].add(symbol)
-    
+
     accounts_by_owner = defaultdict(list)
     for account in accounts:
         accounts_by_owner[account.owner].append(account)
@@ -67,9 +70,9 @@ def main():
     for owner, accts in accounts_by_owner.items():
         print("\nFor %s" % owner)
         run_for_owner(
-            accts=accts, 
-            classes=input_data["classes"], 
-            assets=input_data["assets"], 
+            accts=accts,
+            classes=input_data["classes"],
+            assets=input_data["assets"],
             targets=input_data["targets"][owner],
             no_sell_holdings=no_sell_holdings,
             allow_gains=args.allow_gains
@@ -89,7 +92,7 @@ def run_for_owner(accts, classes, assets, targets, no_sell_holdings, allow_gains
         no_sell_holdings=no_sell_holdings,
         allow_gains=allow_gains
     )
-    
+
     printer.print_investables(accts)
     printer.print_results(
         current_allocations=current_allocations,

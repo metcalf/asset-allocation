@@ -4,7 +4,8 @@ import copy
 import scipy.optimize
 import numpy as np
 
-OPTIMALITY_THRESHOLD = 0.5
+ALLOCATION_OPTIMALITY_THRESHOLD = 0.5
+LOCATION_OPTIMALITY_THRESHOLD = 50
 
 def accounts_to_allocations(accounts, asset_config, filter=None):
     allocations = defaultdict(float)
@@ -91,7 +92,7 @@ def optimize_locations(allocations, class_names, classes, bounds, current_alloca
         non_taxable_preference[i] = total * pref / total_for_class
 
     best_soln = run_location_optimization(taxable_allocations, non_taxable_preference, constraints, taxable_bounds)
-    check_result(best_soln)
+    check_result(best_soln, LOCATION_OPTIMALITY_THRESHOLD)
 
     allocations = allocations_from_taxables(class_totals, best_soln.x)
 
@@ -140,9 +141,9 @@ def optimize_locations(allocations, class_names, classes, bounds, current_alloca
 
     return allocations_from_taxables(class_totals, best_soln.x)
 
-def check_result(soln):
-    if abs(soln.optimality) > OPTIMALITY_THRESHOLD:
-        raise Exception("Expected optimality <<%f, got %f" % (OPTIMALITY_THRESHOLD, soln.optimality))
+def check_result(soln, threshold):
+    if abs(soln.optimality) > threshold:
+        raise Exception("Expected optimality <<%f, got %f" % (threshold, soln.optimality))
 
     if soln.constr_violation > 0.1:
         raise Exception("Expected constr_violation <<0.1, got %f" % soln.constr_violation)
@@ -282,7 +283,7 @@ def optimize_allocations(taxable_accts, non_taxable_accts, classes, assets, targ
     current_allocations = current_taxable_allocations + current_non_taxable_allocations
 
     best_soln = run_optimization(current_allocations, target_allocations_vector, constraints, bounds)
-    check_result(best_soln)
+    check_result(best_soln, ALLOCATION_OPTIMALITY_THRESHOLD)
 
     # Attempt to avoid cases where we sell an asset only to buy in another account
     # best_soln = minimize_moves(
