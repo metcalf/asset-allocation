@@ -31,28 +31,31 @@ def parse(contents, config, allow_after):
     reader = csv.DictReader(section.splitlines())
 
     for row in reader:
-        acct_num = row["Account Name/Number"]
         try:
-            acct_name = num_to_name[acct_num]
-        except KeyError:
-            raise KeyError("Unknown account number %s. Accounts are: %s" % (acct_num, num_to_name))
-        acct = accounts[acct_name]
+            acct_num = row["Account Name/Number"]
+            try:
+                acct_name = num_to_name[acct_num]
+            except KeyError:
+                raise KeyError("Unknown account number %s. Accounts are: %s" % (acct_num, num_to_name))
+            acct = accounts[acct_name]
 
-        symbol = row['Symbol']
+            symbol = row['Symbol']
 
-        if symbol == "BLNK":
-            continue
-        elif acct_num in config["investable"] or symbol in INVESTABLE_SYMBOLS:
-            acct.investable += _parse_num(row['Current Value'])
-        else:
-            holding = Holding(
-                account=acct,
-                symbol=row['Symbol'],
-                quantity=_parse_num(row['Quantity']),
-                price=_parse_num(row['Last Price']),
-                unit_cost=_parse_num(row['Cost Basis Per Share'])
-            )
-            acct.holdings.append(holding)
+            if symbol == "BLNK" or symbol == "CORE**": # BrokerageLink and UNFUNDED CORE POSITION
+                continue
+            elif acct_num in config["investable"] or symbol in INVESTABLE_SYMBOLS:
+                acct.investable += _parse_num(row['Current Value'])
+            else:
+                holding = Holding(
+                    account=acct,
+                    symbol=row['Symbol'],
+                    quantity=_parse_num(row['Quantity']),
+                    price=_parse_num(row['Last Price']),
+                    unit_cost=_parse_num(row['Cost Basis Per Share'])
+                )
+                acct.holdings.append(holding)
+        except ValueError as e:
+            raise ValueError("%s (in %s)" % (e, row))
 
     return accounts.values()
 
