@@ -14,12 +14,10 @@ def read_config(path):
 def read_accounts(path, accounts_config, allow_after):
     accounts = []
     for name, accounts_config in accounts_config.items():
-        accounts += globals()[accounts_config["format"]].parse(
-            open(os.path.join(path, name)).read(), 
-            accounts_config, 
-            allow_after
-        )
-    
+        parser = globals()[accounts_config["format"]]
+        contents = parser.read(os.path.join(path, name))
+        accounts += parser.parse(contents, accounts_config, allow_after)
+
     return accounts
 
 def _validate_config(config):
@@ -33,7 +31,7 @@ def _validate_config(config):
 
         extra = set(classes.keys()) - valid_classes
         if len(extra) > 0:
-            raise Exception("Found unknown classes in allocations for %s: %s" % (owner, extra))        
+            raise Exception("Found unknown classes in allocations for %s: %s" % (owner, extra))
 
     for symbol, defn in config["assets"].items():
         if defn["class"] not in valid_classes:

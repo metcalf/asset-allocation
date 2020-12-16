@@ -1,5 +1,6 @@
+import codecs
 import re
-import csv 
+import csv
 import datetime
 from collections import defaultdict
 
@@ -7,10 +8,14 @@ from models import Account, Holding
 
 INVESTABLE_SYMBOLS = ('IIAXX',)
 
+def read(path):
+    with codecs.open(path, encoding="utf-8") as f:
+        return f.read()
+
 def parse(contents, config, allow_after):
     accounts = _build_accounts(config)
     reader = csv.DictReader(contents.splitlines(), dialect=csv.excel_tab)
-    
+
     # Account, symbol, shares
     executed_sales = defaultdict(lambda: defaultdict(int))
 
@@ -70,7 +75,7 @@ def _build_accounts(config):
             investable=sub.get('investable', 0)
         )
         accounts[name] = acct
-    
+
     return accounts
 
 def _parse_num(num_str):

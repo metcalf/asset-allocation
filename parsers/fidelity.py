@@ -1,5 +1,6 @@
 import csv
 
+import codecs
 import re
 import csv
 import datetime
@@ -8,6 +9,10 @@ from models import Account, Holding
 
 INVESTABLE_SYMBOLS = ("FDRXX**",)
 
+def read(path):
+    with codecs.open(path, encoding="utf-8-sig") as f:
+        return f.read()
+
 def parse(contents, config, allow_after):
     accounts = _build_accounts(config)
     num_to_name = {}
@@ -15,9 +20,9 @@ def parse(contents, config, allow_after):
         for num in nums:
             num_to_name[num] = name
 
-    sections = contents.split("\n\n")
+    sections = contents.split("\r\n\r\n")
 
-    _check_date(sections.pop(), allow_after)
+    _check_date(sections.pop().strip(), allow_after)
 
     section = sections.pop()
     if not section.startswith('"Brokerage services are provided'):
@@ -60,7 +65,7 @@ def parse(contents, config, allow_after):
     return accounts.values()
 
 def _check_date(date_str, allow_after):
-    date = datetime.datetime.strptime(date_str, '"Date downloaded %m/%d/%Y %H:%M %p",')
+    date = datetime.datetime.strptime(date_str, '"Date downloaded %m/%d/%Y %H:%M %p ET"')
     if date < allow_after:
         raise Exception("Export is too old, got a row with date %s" % date_str)
 
@@ -81,4 +86,4 @@ def _parse_num(num_str):
     if num_str == "n/a" or num_str == "--":
         return float('nan')
     else:
-        return float(num_str.lstrip('$'))
+        return float(num_str.lstrip('$').replace(',', ''))
