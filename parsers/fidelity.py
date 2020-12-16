@@ -35,6 +35,10 @@ def parse(contents, config, allow_after):
     section = sections.pop()
     reader = csv.DictReader(section.splitlines())
 
+    total_value = 0
+    source_value = 0
+    source_account_num = config["source_account"]
+
     for row in reader:
         try:
             acct_num = row["Account Name/Number"]
@@ -45,11 +49,18 @@ def parse(contents, config, allow_after):
             acct = accounts[acct_name]
 
             symbol = row['Symbol']
+            desc = row['Description']
+            value = _parse_num(row['Current Value'])
 
-            if symbol == "BLNK" or symbol == "CORE**": # BrokerageLink and UNFUNDED CORE POSITION
+            if desc == "BROKERAGELINK" or symbol == "CORE**": # UNFUNDED CORE POSITION
                 continue
-            elif acct_num in config["investable"] or symbol in INVESTABLE_SYMBOLS:
-                acct.investable += _parse_num(row['Current Value'])
+
+            total_value += value
+
+            if acct_num == source_account_num:
+                source_value += value
+            elif symbol in INVESTABLE_SYMBOLS:
+                acct.investable += value
             else:
                 holding = Holding(
                     account=acct,
@@ -61,6 +72,17 @@ def parse(contents, config, allow_after):
                 acct.holdings.append(holding)
         except ValueError as e:
             raise ValueError("%s (in %s)" % (e, row))
+
+    # Stripe's 401k plan has a weird rule where you have to leave at least 5% of the total
+    # account value in the source account.
+    min_source_value = total_value * config.get("min_source_allocation", 0.0)
+    investable_source_value = source_value - min_source_value
+    if investable_source_value < 0.0:
+        raise ValueError("investable source value shouldn't be less than zero")
+    elif investable_source_value > 0:
+        acct_name = num_to_name[source_account_num]
+        print("%s: $%0.2f available to transfer into Brokeragelink" % (acct_name, investable_source_value))
+        accounts[acct_name].investable += investable_source_value
 
     return accounts.values()
 
