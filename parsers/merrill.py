@@ -1,5 +1,4 @@
 import codecs
-import re
 import csv
 import datetime
 from collections import defaultdict
@@ -13,6 +12,8 @@ def read(path):
         return f.read()
 
 def parse(contents, config, allow_after):
+    raise NotImplemented("Need to handle the switch away from Investable and such")
+
     accounts = _build_accounts(config)
     reader = csv.DictReader(contents.splitlines(), dialect=csv.excel_tab)
 

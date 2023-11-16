@@ -4,8 +4,6 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-numpy = ">= 1.20.2"
-scipy = "*"
 ipython = "*"
 pylint = "*"
 ipdb = "*"

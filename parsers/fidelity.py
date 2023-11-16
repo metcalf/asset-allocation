@@ -7,7 +7,8 @@ import datetime
 
 from models import Account, Holding
 
-INVESTABLE_SYMBOLS = ("FDRXX**",)
+BOND_CUSIP_RE = re.compile(r"[A-Z0-9]{6}[A-Z]{2}\d")
+BOND_DESC_RE = re.compile(r"(\d{2}\.\d{5}%) (\d{2}/\d{2}/\d{4})")
 
 def read(path):
     with codecs.open(path, encoding="utf-8-sig") as f:
@@ -15,10 +16,6 @@ def read(path):
 
 def parse(contents, config, allow_after):
     accounts = _build_accounts(config)
-    num_to_name = {}
-    for name, nums in config["account_mapping"].items():
-        for num in nums:
-            num_to_name[num] = name
 
     sections = contents.split("\r\n\r\n")
 
@@ -35,54 +32,39 @@ def parse(contents, config, allow_after):
     section = sections.pop()
     reader = csv.DictReader(section.splitlines())
 
-    total_value = 0
-    source_value = 0
-    source_account_num = config["source_account"]
-
     for row in reader:
         try:
-            acct_num = row["Account Name/Number"]
-            try:
-                acct_name = num_to_name[acct_num]
-            except KeyError:
-                raise KeyError("Unknown account number %s. Accounts are: %s" % (acct_num, num_to_name))
+            acct_name = row["Account Name"]
             acct = accounts[acct_name]
 
             symbol = row['Symbol']
-            desc = row['Description']
-            value = _parse_num(row['Current Value'])
 
-            if desc == "BROKERAGELINK" or symbol == "CORE**": # UNFUNDED CORE POSITION
-                continue
+            quantity = _parse_num(row['Quantity'])
 
-            total_value += value
-
-            if acct_num == source_account_num:
-                source_value += value
-            elif symbol in INVESTABLE_SYMBOLS:
-                acct.investable += value
+            if BOND_CUSIP_RE.match(symbol):
+                price = _parse_num(row['Current Value']) / quantity
+                desc = row['Description']
+                match = BOND_DESC_RE.search(desc)
+                yield_rate = match[1]
+                maturity_date = match[2]
             else:
-                holding = Holding(
-                    account=acct,
-                    symbol=row['Symbol'],
-                    quantity=_parse_num(row['Quantity']),
-                    price=_parse_num(row['Last Price']),
-                    unit_cost=_parse_num(row['Cost Basis Per Share'])
-                )
-                acct.holdings.append(holding)
+                price = _parse_num(row['Last Price'])
+                yield_rate = _parse_pct(row['Yield'])
+                maturity_date = None
+
+            holding = Holding(
+                account=acct,
+                symbol=row['Symbol'],
+                quantity=quantity,
+                price=price,
+                yield_rate=yield_rate,
+                maturity_date=maturity_date
+                # We're currently importing the yield sheet that doesn't include cost basis
+                # unit_cost=_parse_num(row.get['Cost Basis Per Share'])
+            )
+            acct.holdings.append(holding)
         except ValueError as e:
             raise ValueError("%s (in %s)" % (e, row))
-
-    # Stripe's 401k plan has a weird rule where you have to leave at least 5% of the total
-    # account value in the source account.
-    min_source_value = total_value * config.get("min_source_allocation", 0.0)
-    investable_source_value = source_value - min_source_value
-    if investable_source_value < 0.0:
-        raise ValueError("investable source value shouldn't be less than zero")
-    elif investable_source_value > 0:
-        acct_name = num_to_name[source_account_num]
-        print("%s: $%0.2f available to transfer into Brokeragelink" % (acct_name, investable_source_value))
-        accounts[acct_name].investable += investable_source_value
 
     return accounts.values()
 
@@ -93,12 +75,12 @@ def _check_date(date_str, allow_after):
 
 def _build_accounts(config):
     accounts = {}
-    for name in config['account_mapping'].keys():
+    for name, sub in config['subaccounts'].items():
         acct = Account(
             name=name,
-            owner=config['owner'],
+            owner=sub['owner'],
             broker='fidelity',
-            taxable=False,
+            taxable=sub['taxable'],
         )
         accounts[name] = acct
 
@@ -109,3 +91,6 @@ def _parse_num(num_str):
         return float('nan')
     else:
         return float(num_str.lstrip('$').replace(',', ''))
+
+def _parse_pct(pct_str):
+    return float(pct_str.rstrip('%')) / 100

@@ -2,8 +2,6 @@ from collections import defaultdict
 
 import tabulate
 
-import analysis
-
 def find_buyable_symbols(assets, cls, location, brokers):
     symbols = []
     for symbol, asset in assets.items():
@@ -12,8 +10,8 @@ def find_buyable_symbols(assets, cls, location, brokers):
         except KeyError:
             raise KeyError("missing key 'brokers' for %s" % symbol)
         if (
-            asset.get("location", location) == location and 
-            asset["class"] == cls and 
+            asset.get("location", location) == location and
+            asset["class"] == cls and
             len(brokers.intersection(asset_brokers)) > 0
         ):
             symbols.append((asset.get("preference", 1), symbol))
@@ -28,17 +26,6 @@ def held_symbols_by_class(accts, assets):
             holdings[cls].add(holding.symbol)
 
     return holdings
-
-def print_investables(accts):
-    rows = []
-    for a in accts:
-        rows.append((a.name, "$%d" % a.investable))
-    
-    headers = [
-        "account", "investable"
-    ]
-    print(tabulate.tabulate(rows, headers=headers))
-
 
 def print_results(
     current_allocations, new_allocations, taxable_accts, non_taxable_accts, classes, assets, targets
@@ -99,7 +86,7 @@ def print_results(
             buy_non_taxable_str,
         ]
         rows.append(row)
-    
+
     headers = [
         "class", "total\ncurrent", "\nnew", "\ntarget",
         "taxable\ncurrent", "\nnew", "\nbuy",
