@@ -1,12 +1,13 @@
-import csv
+parsers/fidelity.pyimport csv
 
 import codecs
 import re
 import csv
 import datetime
-import math
 
 from models import Account, Holding
+
+EXPECT_ACCTS_STRING = 'Positions: All Accounts'
 
 BOND_CUSIP_RE = re.compile(r"[A-Z0-9]{6}([A-Z]{2}|[A-Z]\d|\d[A-Z])\d")
 BOND_DESC_RE = re.compile(r"(\d{1,2}\.\d{5}%) (\d{2}/\d{2}/\d{4})")
@@ -16,30 +17,23 @@ def read(path):
         return f.read()
 
 def parse(contents, config, allow_after):
-    ignore_accounts = config.get("ignore_accounts", [])
     accounts = _build_accounts(config)
 
-    sections = contents.split("\r\n\r\n")
+    lines = contents.split("\n")
 
-    _check_date(sections.pop().strip(), allow_after)
+    if lines[0] != EXPECT_ACCTS_STRING:
+        raise Exception("Expected '%s', got: %s" % (EXPECT_ACCTS_STRING, lines[0]))
 
-    section = sections.pop()
-    if not section.startswith('"Brokerage services are provided'):
-        raise Exception(f"Expected useless section, got: {section}")
+    _check_date(lines[1], allow_after)
 
-    section = sections.pop()
-    if not section.startswith('"The data and information in this spreadsheet'):
-        raise Exception(f"Expected useless section, got: {section}")
+    if len(lines[2]) > 0:
+        raise Exception("Expected empty 3rd line, got: %s" % lines[2])
 
-    section = sections.pop()
-    reader = csv.DictReader(section.splitlines())
+    reader = csv.DictReader(lines[3:])
 
     for row in reader:
         try:
-            acct_name = f"{row['Account Name']} ({row['Account Number']})"
-            if acct_name in ignore_accounts:
-                continue
-
+            acct_name = row["Account Name"]
             acct = accounts[acct_name]
 
             symbol = row['Symbol']
@@ -50,7 +44,7 @@ def parse(contents, config, allow_after):
                 # so we assume price is always $1 and derive quantity from value
                 quantity = _parse_num(row['Current Value'])
                 price = 1.0
-                annual_income = _parse_pct(row['Yield']) * quantity
+                yield_rate = _parse_pct(row['Yield'])
                 maturity_date = None
             else:
                 quantity = _parse_num(row['Quantity'])
@@ -59,36 +53,34 @@ def parse(contents, config, allow_after):
                     price = _parse_num(row['Current Value']) / quantity
                     desc = row['Description']
                     match = BOND_DESC_RE.search(desc)
-                    # Coupon * dollars at par
-                    annual_income = _parse_pct(match[1]) * quantity
+                    yield_rate = _parse_pct(match[1])
 
+                    print(match[2].split("/"))
                     (month, day, year) = match[2].split("/")
                     maturity_date = datetime.date(int(year), int(month), int(day))
                 else:
                     price = _parse_num(row['Last Price'])
-                    annual_income = _parse_num(row['Est. Annual Income'])
-                    if math.isnan(annual_income):
-                        annual_income = _parse_pct(row['Yield']) * _parse_num(row['Current Value'])
+                    yield_rate = _parse_pct(row['Yield'])
                     maturity_date = None
 
             holding = Holding(
                 account=acct,
-                symbol=symbol,
+                symbol=row['Symbol'],
                 quantity=quantity,
                 price=price,
-                annual_income=annual_income,
+                yield_rate=yield_rate,
                 maturity_date=maturity_date
             )
             acct.holdings.append(holding)
         except ValueError as e:
-            raise ValueError(f"{e} (in {row})")
+            raise ValueError("%s (in %s)" % (e, row))
 
     return accounts.values()
 
 def _check_date(date_str, allow_after):
     date = datetime.datetime.strptime(date_str, '"Date downloaded %m/%d/%Y %H:%M %p ET"')
     if date < allow_after:
-        raise Exception(f"Export is too old, got a row with date {date_str}")
+        raise Exception("Export is too old, got a row with date %s" % date_str)
 
 def _build_accounts(config):
     accounts = {}

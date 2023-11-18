@@ -23,16 +23,6 @@ def read_accounts(path, accounts_config, allow_after):
 def _validate_config(config):
     valid_classes = set(config["classes"])
 
-    # Check that allocations sum to 1 and contain valid classes
-    for owner, classes in config["targets"].items():
-        total = sum(classes.values())
-        if abs(total - 1) > 0.0001:
-            raise Exception("Asset targets for %s sum to %0.4f" % (owner, total))
-
-        extra = set(classes.keys()) - valid_classes
-        if len(extra) > 0:
-            raise Exception("Found unknown classes in allocations for %s: %s" % (owner, extra))
-
     for symbol, defn in config["assets"].items():
         if defn["class"] not in valid_classes:
             raise Exception("Unknown class %s for %s" % (defn["class"], symbol))

@@ -38,14 +38,14 @@ class Account(object):
             len(self.holdings)
         )
 
+# For bonds we treat quantity as number of dollars at par with price*quantity=current value
 class Holding(object):
-    def __init__(self, account, symbol, quantity, price, unit_cost, yield_rate, maturity_date):
+    def __init__(self, account, symbol, quantity, price, annual_income, maturity_date):
         self._account = account
         self._symbol = symbol
         self._quantity = quantity
         self._price = price
-        self._unit_cost = unit_cost
-        self._yield_rate = yield_rate
+        self._annual_income = annual_income
         self._maturity_date = maturity_date
 
     @property
@@ -65,16 +65,8 @@ class Holding(object):
         return self._price * self.quantity
 
     @property
-    def basis(self):
-        return self.unit_cost * self.quantity
-
-    @property
-    def unit_cost(self):
-        return self._unit_cost
-
-    @property
-    def yield_rate(self):
-        return self._yield_rate
+    def annual_income(self):
+        return self._annual_income
 
     @property
     def maturity_date(self):
@@ -88,10 +80,9 @@ class Holding(object):
         return str(self)
 
     def __str__(self):
-        return "%s(value=$%0.2f, gain=$%0.2f, qty=%s, acct=%s)" % (
+        return "%s(value=$%0.2f, qty=%s, acct=%s)" % (
             self.symbol,
             self.value,
-            self.value - self.basis,
             self.quantity,
             self.account.name,
         )
