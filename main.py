@@ -60,18 +60,25 @@ def main():
         return by_class
 
     print_allocations_by_category(
-        find_allocations_by(accounts, by_class_for_category("Bond Fund"))
+        find_allocations_by(accounts_by_owner['joint'], by_class_for_category("Bond Fund"))
     )
     print()
     print_allocations_by_category(
-        find_allocations_by(accounts, by_class_for_category("Equity Fund"))
+        find_allocations_by(accounts_by_owner['joint'], by_class_for_category("Equity Fund"))
     )
 
     print_header("ANDREW ALLOCATIONS")
-    print_allocations_by_category(
-        find_allocations_by_category(
+    andrew_by_category = find_allocations_by_category(
             accounts_by_owner['andrew'], input_data['classes'], input_data["assets"]
         )
+    print_allocations_by_category(andrew_by_category)
+    print()
+    andrew_bond_classes = find_allocations_by(accounts_by_owner['andrew'], by_class_for_category("Bond Fund"))
+    andrew_bond_classes["Bond"] = andrew_by_category["Bond"]
+    print_allocations_by_category(andrew_bond_classes)
+    print()
+    print_allocations_by_category(
+        find_allocations_by(accounts_by_owner['andrew'], by_class_for_category("Equity Fund"))
     )
 
 def print_header(text):
