@@ -50,7 +50,13 @@ def parse(contents, config, allow_after):
                 # so we assume price is always $1 and derive quantity from value
                 quantity = _parse_num(row['Current Value'])
                 price = 1.0
-                annual_income = _parse_pct(row['Yield']) * quantity
+                if symbol == "CORE":
+                    # NB: The CORE** position in the Fidelity Cash Management account does
+                    # not report a yield but we just ignore it because it should be
+                    # immaterial.
+                    annual_income = 0
+                else:
+                    annual_income = _parse_pct(row['Yield']) * quantity
                 maturity_date = None
             else:
                 quantity = _parse_num(row['Quantity'])

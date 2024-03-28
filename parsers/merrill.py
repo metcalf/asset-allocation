@@ -1,24 +1,21 @@
 import codecs
 import csv
 import datetime
+import requests
+import re
 from collections import defaultdict
 
 from models import Account, Holding
 
-INVESTABLE_SYMBOLS = ('IIAXX',)
+YIELD_REX = re.compile(r'data-test="(?:TD|7_DAY)_YIELD-value">(\d+\.\d+)%</td>')
 
 def read(path):
     with codecs.open(path, encoding="utf-8") as f:
         return f.read()
 
 def parse(contents, config, allow_after):
-    raise NotImplemented("Need to handle the switch away from Investable and such")
-
     accounts = _build_accounts(config)
     reader = csv.DictReader(contents.splitlines(), dialect=csv.excel_tab)
-
-    # Account, symbol, shares
-    executed_sales = defaultdict(lambda: defaultdict(int))
 
     for row in reader:
         _check_date(row.get('COB Date') or row['Date'], allow_after)
@@ -27,38 +24,42 @@ def parse(contents, config, allow_after):
         acct = accounts[nickname]
 
         symbol = row['Symbol']
-        value = _parse_num(row['Value ($)'])
         quantity = _parse_num(row['Quantity'])
+        price = _parse_num(row['Price ($)'])
 
-        if symbol == "--": # Executed transaction against margin account
-            continue
-        elif symbol in INVESTABLE_SYMBOLS:
-            acct.investable += value
-        elif row['Short/Long'] == ' Executed Sell':
-            assert quantity < 0, "Sell quantities should be negative"
-            executed_sales[acct][symbol] += -quantity
+        # NB: If we switch to margin account this is handled differently
+        if symbol == "--":
+            symbol = "MLSWEEP"
+            annual_income = 0 # Barely pays any interest and should be a small allocation
         else:
-            holding = Holding(
-                account=acct,
-                symbol=symbol,
-                quantity=quantity,
-                price=value / quantity,
-                unit_cost=_parse_num(row['Unit Cost ($)'])
-            )
-            acct.holdings.append(holding)
+            yld = _query_yield(symbol)
+            print(f"Yield {symbol}={yld*100}%")
+            annual_income = yld * _parse_num(row['Value ($)'])
 
-    for acct, symbols in executed_sales.items():
-        for symbol, to_sell in symbols.items():
-            holdings = [h for h in acct.holdings if h.symbol == symbol]
-            holdings.sort(key=lambda h: h.unit_cost)
+        holding = Holding(
+            account=acct,
+            symbol=symbol,
+            quantity=quantity,
+            price=price,
+            annual_income=annual_income,
+            maturity_date=None
+        )
+        acct.holdings.append(holding)
 
-            while to_sell > 0:
-                holding = holdings.pop(0)
-                sell = min(holding.quantity, to_sell)
-                holding.quantity -= sell
-                to_sell -= sell
 
     return accounts.values()
+
+def _query_yield(symbol):
+    url = f'https://finance.yahoo.com/quote/{symbol}/'
+    resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+    resp.raise_for_status()
+
+    match = YIELD_REX.search(resp.text)
+
+    if match is None:
+        raise f"Unable to find yield text at {url}"
+
+    return float(match[1]) / 100
 
 def _check_date(date_str, allow_after):
     date = datetime.datetime.strptime(date_str, '%m/%d/%Y')
@@ -73,7 +74,6 @@ def _build_accounts(config):
             owner=sub['owner'],
             broker='merrill',
             taxable=sub['taxable'],
-            investable=sub.get('investable', 0)
         )
         accounts[name] = acct
 

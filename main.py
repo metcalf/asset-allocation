@@ -112,13 +112,13 @@ def print_data_output(accounts, cash_symbols, amounts_by_category):
     if len(amounts_by_category.keys()) != 3:
         raise f"Expected 3 categories need to update spreadsheet rows first: {amounts_by_category.keys()}"
 
-    print(f"Fidelity taxable annual income,{income:0.2f}")
-    print(f"Fidelity taxable cash value,{cash:0.2f}")
-    print(f"Fidelity taxable non-cash value,{taxable:0.2f}")
-    print(f"Fidelity non-taxable value,{nontaxable:0.2f}")
-    print(f"Fidelity equity fund value,{amounts_by_category['Equity Fund']:0.2f}")
-    print(f"Fidelity bond fund value,{amounts_by_category['Bond Fund']:0.2f}")
-    print(f"Fidelity reit value,{amounts_by_category['Real Estate']:0.2f}")
+    print(f"Brokerage taxable annual income,{income:0.2f}")
+    print(f"Brokerage taxable cash value,{cash:0.2f}")
+    print(f"Brokerage taxable non-cash value,{taxable:0.2f}")
+    print(f"Brokerage non-taxable value,{nontaxable:0.2f}")
+    print(f"Brokerage equity fund value,{amounts_by_category['Equity Fund']:0.2f}")
+    print(f"Brokerage bond fund value,{amounts_by_category['Bond Fund']:0.2f}")
+    print(f"Brokerage reit value,{amounts_by_category['Real Estate']:0.2f}")
     print("")
     print("CUSIP,Par Value,Current Value,Annual Income,Maturity")
     bonds.sort(key=lambda bond: bond.maturity_date)
