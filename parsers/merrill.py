@@ -7,13 +7,13 @@ from collections import defaultdict
 
 from models import Account, Holding
 
-YIELD_REX = re.compile(r'data-test="(?:TD|7_DAY)_YIELD-value">(\d+\.\d+)%</td>')
+YIELD_REX = re.compile(r'\\"yield\\":{\\"raw\\":(0.\d+),')
 
 def read(path):
     with codecs.open(path, encoding="utf-8") as f:
         return f.read()
 
-def parse(contents, config, allow_after):
+def parse(contents, config, allow_after, yields):
     accounts = _build_accounts(config)
     reader = csv.DictReader(contents.splitlines(), dialect=csv.excel_tab)
 
@@ -32,7 +32,10 @@ def parse(contents, config, allow_after):
             symbol = "MLSWEEP"
             annual_income = 0 # Barely pays any interest and should be a small allocation
         else:
-            yld = _query_yield(symbol)
+            if symbol in yields:
+                yld = yields[symbol]
+            else:
+                yld = _query_yield(symbol)
             print(f"Yield {symbol}={yld*100}%")
             annual_income = yld * _parse_num(row['Value ($)'])
 
@@ -51,15 +54,15 @@ def parse(contents, config, allow_after):
 
 def _query_yield(symbol):
     url = f'https://finance.yahoo.com/quote/{symbol}/'
-    resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+    resp = requests.get(url, headers={"User-Agent": "Mozilla/5.1"})
     resp.raise_for_status()
 
     match = YIELD_REX.search(resp.text)
 
     if match is None:
-        raise f"Unable to find yield text at {url}"
+        raise Exception(f"Unable to find yield text at {url}")
 
-    return float(match[1]) / 100
+    return float(match[1])
 
 def _check_date(date_str, allow_after):
     date = datetime.datetime.strptime(date_str, '%m/%d/%Y')

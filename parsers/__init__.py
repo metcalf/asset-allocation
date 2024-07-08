@@ -11,12 +11,12 @@ def read_config(path):
     _validate_config(cfg)
     return cfg
 
-def read_accounts(path, accounts_config, allow_after):
+def read_accounts(path, accounts_config, allow_after, yields):
     accounts = []
     for name, accounts_config in accounts_config.items():
         parser = globals()[accounts_config["format"]]
         contents = parser.read(os.path.join(path, name))
-        accounts += parser.parse(contents, accounts_config, allow_after)
+        accounts += parser.parse(contents, accounts_config, allow_after, yields)
 
     return accounts
 

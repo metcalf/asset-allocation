@@ -11,12 +11,19 @@ def main():
     parser.add_argument('config_path')
     parser.add_argument('--max-age', default=7, type=int,
                         help='maximum age of input data files')
+    parser.add_argument('--yield', action='append', default=[],
+                        help='Investment yield in the form SYMBOL=PCT (e.g. --yield FIGXX=5.32)')
     args = parser.parse_args()
 
     input_data = parsers.read_config(args.config_path)
 
+    yields = {}
+    for yield_arg in vars(args)['yield']:
+        symbol, value = yield_arg.split("=", 2)
+        yields[symbol] = float(value) / 100
+
     allow_after = datetime.datetime.now() - datetime.timedelta(days=args.max_age)
-    accounts = parsers.read_accounts(os.path.dirname(args.config_path), input_data["accounts"], allow_after)
+    accounts = parsers.read_accounts(os.path.dirname(args.config_path), input_data["accounts"], allow_after, yields)
 
     all_symbols = input_data["assets"].keys()
     for account in accounts:

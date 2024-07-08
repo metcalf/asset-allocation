@@ -15,7 +15,7 @@ def read(path):
     with codecs.open(path, encoding="utf-8-sig") as f:
         return f.read()
 
-def parse(contents, config, allow_after):
+def parse(contents, config, allow_after, yields):
     ignore_accounts = config.get("ignore_accounts", [])
     accounts = _build_accounts(config)
 
@@ -34,6 +34,7 @@ def parse(contents, config, allow_after):
     section = sections.pop()
     reader = csv.DictReader(section.splitlines())
 
+    # TODO: Implement yield overrides
     for row in reader:
         try:
             acct_name = f"{row['Account Name']} ({row['Account Number']})"
@@ -92,7 +93,10 @@ def parse(contents, config, allow_after):
     return accounts.values()
 
 def _check_date(date_str, allow_after):
-    date = datetime.datetime.strptime(date_str, '"Date downloaded %m/%d/%Y %H:%M %p ET"')
+    date = datetime.datetime.strptime(
+        date_str.replace('p.m', 'PM').replace('a.m', 'AM'),
+        '"Date downloaded %b-%d-%Y %I:%M %p ET"'
+    )
     if date < allow_after:
         raise Exception(f"Export is too old, got a row with date {date_str}")
 
