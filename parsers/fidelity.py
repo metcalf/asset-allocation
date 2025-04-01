@@ -57,7 +57,7 @@ def parse(contents, config, allow_after, yields):
                     # immaterial.
                     annual_income = 0
                 else:
-                    annual_income = _parse_pct(row['Yield']) * quantity
+                    annual_income = _get_yield(row) * quantity
                 maturity_date = None
             else:
                 quantity = _parse_num(row['Quantity'])
@@ -75,7 +75,7 @@ def parse(contents, config, allow_after, yields):
                     price = _parse_num(row['Last Price'])
                     annual_income = _parse_num(row['Est. Annual Income'])
                     if math.isnan(annual_income):
-                        annual_income = _parse_pct(row['Yield']) * _parse_num(row['Current Value'])
+                        annual_income = _get_yield(row) * _parse_num(row['Current Value'])
                     maturity_date = None
 
             holding = Holding(
@@ -121,3 +121,6 @@ def _parse_num(num_str):
 
 def _parse_pct(pct_str):
     return float(pct_str.rstrip('%')) / 100
+
+def _get_yield(row):
+    return _parse_pct(row.get('SEC Yield', row['Dist. Yield']))

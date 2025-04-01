@@ -56,6 +56,9 @@ def main():
 
     print_header("JOINT ALLOCATIONS")
 
+    print_total(accounts_by_owner['joint'])
+    print()
+
     def by_class_for_category(category):
         def by_class(holding):
             if holding.is_bond:
@@ -75,6 +78,8 @@ def main():
     )
 
     print_header("ANDREW ALLOCATIONS")
+    print_total(accounts_by_owner['andrew'])
+    print()
     andrew_by_category = find_allocations_by_category(
             accounts_by_owner['andrew'], input_data['classes'], input_data["assets"]
         )
@@ -91,6 +96,14 @@ def main():
 def print_header(text):
      print()
      print(f"====== {text} ======")
+
+def print_total(accounts):
+    total = 0
+    for account in accounts:
+        for holding in account.holdings:
+            total += holding.value
+
+    print(f"Total: ${round(total):,.0f}")
 
 def print_data_output(accounts, cash_symbols, amounts_by_category):
     bonds = []
@@ -159,7 +172,7 @@ def print_allocations_by_category(categories, name='category'):
     for category, amt in categories.items():
         rows.append([
             category,
-            f"${amt:,.0f}",
+            f"${round(amt):,.0f}",
             f"{(amt / total * 100):0.1f}%"
         ])
 

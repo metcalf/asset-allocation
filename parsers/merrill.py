@@ -54,7 +54,7 @@ def parse(contents, config, allow_after, yields):
 
 def _query_yield(symbol):
     url = f'https://finance.yahoo.com/quote/{symbol}/'
-    resp = requests.get(url, headers={"User-Agent": "Mozilla/5.1"})
+    resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
     resp.raise_for_status()
 
     match = YIELD_REX.search(resp.text)
