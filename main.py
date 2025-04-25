@@ -55,43 +55,10 @@ def main():
     )
 
     print_header("JOINT ALLOCATIONS")
-
-    print_total(accounts_by_owner['joint'])
-    print()
-
-    def by_class_for_category(category):
-        def by_class(holding):
-            if holding.is_bond:
-                return None
-            asset_class = input_data["assets"][holding.symbol]['class']
-            if input_data['classes'][asset_class]['category'] == category:
-                return asset_class
-
-        return by_class
-
-    print_allocations_by_category(
-        find_allocations_by(accounts_by_owner['joint'], by_class_for_category("Bond Fund"))
-    )
-    print()
-    print_allocations_by_category(
-        find_allocations_by(accounts_by_owner['joint'], by_class_for_category("Equity Fund"))
-    )
-
+    print("NB: Joint allocations do not include bonds since they cover cashwflow")
+    print_allocations(accounts_by_owner['joint'], input_data, include_bonds=False)
     print_header("ANDREW ALLOCATIONS")
-    print_total(accounts_by_owner['andrew'])
-    print()
-    andrew_by_category = find_allocations_by_category(
-            accounts_by_owner['andrew'], input_data['classes'], input_data["assets"]
-        )
-    print_allocations_by_category(andrew_by_category)
-    print()
-    andrew_bond_classes = find_allocations_by(accounts_by_owner['andrew'], by_class_for_category("Bond Fund"))
-    andrew_bond_classes["Bond"] = andrew_by_category["Bond"]
-    print_allocations_by_category(andrew_bond_classes)
-    print()
-    print_allocations_by_category(
-        find_allocations_by(accounts_by_owner['andrew'], by_class_for_category("Equity Fund"))
-    )
+    print_allocations(accounts_by_owner['andrew'], input_data, include_bonds=True)
 
 def print_header(text):
      print()
@@ -145,6 +112,28 @@ def print_data_output(accounts, cash_symbols, amounts_by_category):
     for bond in bonds:
         print(f"{bond.symbol},{bond.quantity:0.2f},{bond.value:0.2f},{bond.annual_income:0.2f},{bond.maturity_date.strftime('%m/%d/%Y')}")
 
+def print_allocations(accounts, input_data, include_bonds):
+    print_total(accounts)
+    print()
+    by_category = find_allocations_by_category(
+            accounts, input_data['classes'], input_data["assets"]
+        )
+    bond_classes = find_allocations_by(accounts, by_class_for_category(input_data, "Bond Fund"))
+
+    if include_bonds:
+        bond_classes["Bond"] = by_category["Bond"]
+    else:
+        del by_category["Bond"]
+
+    print_allocations_by_category(by_category)
+    print()
+
+    print_allocations_by_category(bond_classes)
+    print()
+    print_allocations_by_category(
+        find_allocations_by(accounts, by_class_for_category(input_data, "Equity Fund"))
+    )
+
 def find_allocations_by(accounts, by):
     categories = defaultdict(lambda: 0)
     for account in accounts:
@@ -165,6 +154,16 @@ def find_allocations_by_category(accounts, classes, assets):
 
     return find_allocations_by(accounts, by_category)
 
+def by_class_for_category(input_data, category):
+    def by_class(holding):
+        if holding.is_bond:
+            return None
+        asset_class = input_data["assets"][holding.symbol]['class']
+        if input_data['classes'][asset_class]['category'] == category:
+            return asset_class
+
+    return by_class
+
 def print_allocations_by_category(categories, name='category'):
     total = sum(v for v in categories.values())
 
@@ -179,7 +178,6 @@ def print_allocations_by_category(categories, name='category'):
     headers = [name, 'amount', 'percent']
 
     print(tabulate.tabulate(rows, headers=headers))
-
 
 def warn(text):
     print(f"\033[0;31mWARNING:\033[0m {text}")
