@@ -73,7 +73,7 @@ def parse(contents, config, allow_after, yields):
                     maturity_date = datetime.date(int(year), int(month), int(day))
                 else:
                     price = _parse_num(row['Last Price'])
-                    annual_income = _parse_num(row['Est. Annual Income'])
+                    annual_income = _parse_num(row['Est. annual income'])
                     if math.isnan(annual_income):
                         annual_income = _get_yield(row) * _parse_num(row['Current Value'])
                     maturity_date = None
@@ -123,4 +123,8 @@ def _parse_pct(pct_str):
     return float(pct_str.rstrip('%')) / 100
 
 def _get_yield(row):
-    return _parse_pct(row.get('SEC Yield', row['Dist. Yield']))
+    for key in ['SEC yield', 'Dist. yield']:
+        if key in row and row[key] != '--':
+            return _parse_pct(row[key])
+
+    raise KeyError(f"No yield found in row: {row}")
