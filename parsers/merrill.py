@@ -16,16 +16,18 @@ def read(path):
 def parse(contents, config, allow_after, yields):
     accounts = _build_accounts(config)
     reader = csv.DictReader(contents.splitlines(), dialect=csv.excel_tab)
+    # Normalize header capitalization so lookups are case insensitive
+    reader.fieldnames = [name.lower() for name in reader.fieldnames]
 
     for row in reader:
-        _check_date(row.get('COB Date') or row['Date'], allow_after)
+        _check_date(row.get('cob date') or row['date'], allow_after)
 
-        nickname = row['Account Nickname']
+        nickname = row['account nickname']
         acct = accounts[nickname]
 
-        symbol = row['Symbol']
-        quantity = _parse_num(row['Quantity'])
-        price = _parse_num(row['Price ($)'])
+        symbol = row['symbol']
+        quantity = _parse_num(row['quantity'])
+        price = _parse_num(row['price ($)'])
 
         # NB: If we switch to margin account this is handled differently
         if symbol == "--":
@@ -37,7 +39,7 @@ def parse(contents, config, allow_after, yields):
             else:
                 yld = _query_yield(symbol)
             print(f"Yield {symbol}={yld*100}%")
-            annual_income = yld * _parse_num(row['Value ($)'])
+            annual_income = yld * _parse_num(row['value ($)'])
 
         holding = Holding(
             account=acct,

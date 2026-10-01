@@ -33,23 +33,25 @@ def parse(contents, config, allow_after, yields):
 
     section = sections.pop()
     reader = csv.DictReader(section.splitlines())
+    # Fidelity keeps changing header capitalization, so normalize to lowercase
+    reader.fieldnames = [name.lower() for name in reader.fieldnames]
 
     # TODO: Implement yield overrides
     for row in reader:
         try:
-            acct_name = f"{row['Account Name']} ({row['Account Number']})"
+            acct_name = f"{row['account name']} ({row['account number']})"
             if acct_name in ignore_accounts:
                 continue
 
             acct = accounts[acct_name]
 
-            symbol = row['Symbol']
+            symbol = row['symbol']
 
             if symbol.endswith("**"):
                 symbol = symbol.rstrip("**")
                 # Money market core positions don't get price and quantity in this export
                 # so we assume price is always $1 and derive quantity from value
-                quantity = _parse_num(row['Current Value'])
+                quantity = _parse_num(row['current value'])
                 price = 1.0
                 if symbol == "CORE":
                     # NB: The CORE** position in the Fidelity Cash Management account does
@@ -60,11 +62,11 @@ def parse(contents, config, allow_after, yields):
                     annual_income = _get_yield(row) * quantity
                 maturity_date = None
             else:
-                quantity = _parse_num(row['Quantity'])
+                quantity = _parse_num(row['quantity'])
 
                 if BOND_CUSIP_RE.match(symbol):
-                    price = _parse_num(row['Current Value']) / quantity
-                    desc = row['Description']
+                    price = _parse_num(row['current value']) / quantity
+                    desc = row['description']
                     match = BOND_DESC_RE.search(desc)
                     # Coupon * dollars at par
                     annual_income = _parse_pct(match[1]) * quantity
@@ -72,10 +74,10 @@ def parse(contents, config, allow_after, yields):
                     (month, day, year) = match[2].split("/")
                     maturity_date = datetime.date(int(year), int(month), int(day))
                 else:
-                    price = _parse_num(row['Last Price'])
-                    annual_income = _parse_num(row['Est. annual income'])
+                    price = _parse_num(row['last price'])
+                    annual_income = _parse_num(row['est. annual income'])
                     if math.isnan(annual_income):
-                        annual_income = _get_yield(row) * _parse_num(row['Current Value'])
+                        annual_income = _get_yield(row) * _parse_num(row['current value'])
                     maturity_date = None
 
             holding = Holding(
@@ -123,7 +125,7 @@ def _parse_pct(pct_str):
     return float(pct_str.rstrip('%')) / 100
 
 def _get_yield(row):
-    for key in ['SEC yield', 'Dist. yield']:
+    for key in ['sec yield', 'dist. yield']:
         if key in row and row[key] != '--':
             return _parse_pct(row[key])
 
